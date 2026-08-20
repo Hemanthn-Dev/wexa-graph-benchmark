@@ -1,448 +1,146 @@
-\# Wexa Graph Database Benchmark
+# Wexa Graph Database Benchmark
 
+A reproducible benchmark comparing graph database performance using the `soc-pokec-200k` dataset.
 
+## Databases
 
-Benchmark project for evaluating graph database workloads using the
+- CognoDB
+- Neo4j
+- Memgraph
+- ArangoDB
 
-soc-pokec dataset.
+## Dataset
 
-
-
-\## Objective
-
-
-
-The goal of this project is to evaluate graph database performance across
-
-data loading and common graph workloads.
-
-
-
-The benchmark focuses on:
-
-
-
-\- Data loading
-
-\- Lookup latency
-
-\- Traversal latency
-
-\- Aggregation latency
-
-\- Concurrent throughput
-
-\- Resource usage
-
-\- Reproducibility and documented test conditions
-
-
-
-\## Dataset
-
-
-
-Dataset: soc-pokec-200k
-
-
-
-Prepared dataset:
-
-
-
-\- Expected relationships: 200,000
-
-\- Expected unique nodes: 91,489
-
-\- Duplicate edges: 0
-
-\- Self-loops: 0
-
-\- Malformed lines: 0
-
-\- Minimum node ID: 1
-
-\- Maximum node ID: 1,632,578
-
-
-
-The dataset was validated before benchmarking.
-
-
-
-\## CognoDB Test Environment
-
-
-
-Database:
-
-
-
-\- CognoDB
-
-\- Python Neo4j-compatible Bolt driver
-
-\- Python 3.10.5
-
-
-
-Benchmark dataset state:
-
-
-
-\- Users loaded: 91,489
-
-\- Relationships loaded: 50,000
-
-
-
-Note: The full 200,000 relationship load was not completed because
-
-the Bolt connection repeatedly became defunct during relationship
-
-ingestion. Therefore, query results in this run are based on the
-
-50,000 relationships successfully loaded.
-
-
-
-\## Loading Method
-
-
-
-The initial loader used Python and the Bolt driver with batched Cypher
-
-transactions.
-
-
-
-The final loading experiment used two phases:
-
-
-
-1\. Create all unique User nodes.
-
-2\. Create relationships between the existing User nodes.
-
-
-
-Batch size:
-
-
-
-\- 2,000 records
-
-
-
-Node ingestion successfully completed:
-
-
-
-\- 91,489 users
-
-
-
-Relationship ingestion reached:
-
-
-
-\- 50,000 / 200,000 relationships
-
-
-
-During relationship ingestion, the driver reported repeated connection
-
-errors:
-
-
-
-&#x20;   Failed to read from defunct connection
-
-&#x20;   OSError('No data')
-
-
-
-The loading process was stopped after the connection failures.
-
-
-
-This loading result is therefore reported as an observed limitation,
-
-not as a completed 200,000-edge benchmark.
-
-
-
-\## Lookup Benchmark
-
-
-
-Configuration:
-
-
-
-\- Iterations: 100
-
-\- Warm-up queries: 10
-
-\- Query type: User ID lookup
-
-
-
-Results:
-
-
-
-| Metric | Result |
-
+| Metric | Value |
 |---|---:|
+| Dataset | `soc-pokec-200k` |
+| Unique users | 91,489 |
+| Relationships | 200,000 |
 
-| Queries | 100 |
+The same prepared dataset was used for the four database experiments. CognoDB was limited to 50,000 loaded relationships because its Bolt connection repeatedly became defunct during relationship ingestion.
 
-| Minimum | 285.416 ms |
+## Benchmarks
 
-| Average | 464.450 ms |
+The project measures:
 
-| p50 | 408.677 ms |
+1. Indexed/filtered lookup latency
+2. Graph traversal latency: 1-hop, 2-hop, and 3-hop
+3. Relationship aggregation latency
+4. Mixed concurrency: 10 workers, 100 requests, 80% reads and 20% writes
+5. Data loading time and throughput
 
-| p95 | 801.277 ms |
+Latency is reported primarily using p50 and p95. See [`results.md`](results.md) for the detailed benchmark record and methodology.
 
-| Maximum | 1638.035 ms |
+## Key Results
 
+### Indexed lookup
 
+| Database | p50 | p95 |
+|---|---:|---:|
+| Neo4j | **86.243 ms** | **89.941 ms** |
+| Memgraph | 148.747 ms | 159.014 ms |
+| CognoDB | 240.174 ms | 258.890 ms |
+| ArangoDB | 291.125 ms | 507.610 ms |
 
-\## Traversal Benchmark
+### Traversal p50
 
+| Database | 1-hop | 2-hop | 3-hop |
+|---|---:|---:|---:|
+| Neo4j | **86.884 ms** | **88.918 ms** | **91.127 ms** |
+| Memgraph | 158.713 ms | 152.368 ms | 154.710 ms |
+| CognoDB | 362.610 ms | N/A | N/A |
+| ArangoDB | 264.419 ms | 270.963 ms | 3990.935 ms* |
 
+*ArangoDB 3-hop was completed with 20 measured iterations after the original 100-iteration run became impractically slow.
 
-Configuration:
+### Aggregation p50
 
+| Database | p50 | p95 |
+|---|---:|---:|
+| Neo4j | **86.243 ms** | 269.195 ms |
+| Memgraph | 180.567 ms | **192.762 ms** |
+| CognoDB | 246.443 ms | 288.668 ms |
+| ArangoDB | 301.049 ms | 666.442 ms |
 
+### Mixed concurrency
 
-\- Starting user: 1
+| Database | Throughput | p50 | p95 |
+|---|---:|---:|---:|
+| Memgraph | **32.78 req/s** | 151.922 ms | 875.560 ms |
+| Neo4j | 27.08 req/s | **88.657 ms** | 463.317 ms |
+| CognoDB | 15.50 req/s | 1303.085 ms | 2587.818 ms |
+| ArangoDB | 6.64 req/s | 1314.967 ms | 2214.070 ms |
 
-\- Iterations: 50
+## Data Loading
 
-\- Warm-up queries: 5
+| Database | Users | Relationships | Load time |
+|---|---:|---:|---:|
+| Neo4j | 91,489 | 200,000 | **25.85 s** |
+| Memgraph | 91,489 | 200,000 | 100.66 s* |
+| CognoDB | 91,489 | 50,000** | Not completed |
+| ArangoDB | 91,489 | 200,000 | 214.36 s |
 
-\- Traversal depth: 1 hop
+*Memgraph relationship loading time: 100.66 seconds.
 
+**CognoDB relationship ingestion repeatedly failed at the Bolt connection, so the full 200,000 relationships were not loaded.
 
+## Summary
 
-Results:
+Based on these benchmark runs:
 
+- **Neo4j** delivered the lowest latency across the measured lookup, traversal, and aggregation workloads and also had strong concurrent performance.
+- **Memgraph** achieved the highest throughput in the mixed read/write concurrency test.
+- **CognoDB** completed the query benchmarks on its successfully loaded dataset but showed higher latency than Neo4j and Memgraph in the measured workloads.
+- **ArangoDB** showed substantially higher latency for 3-hop traversal and mixed concurrency in this test environment.
 
+These results are specific to the tested dataset, client implementations, cloud configurations, network conditions, and workload definitions. They are not universal database rankings.
 
-| Metric | Result |
+## Repository Structure
 
-|---|---:|
+```text
+.
+├── data/
+├── benchmark_aggregation.py
+├── benchmark_concurrency.py
+├── benchmark_lookup.py
+├── benchmark_traversal.py
+├── benchmark_neo4j_*.py
+├── benchmark_memgraph_*.py
+├── benchmark_arango_*.py
+├── load_cognodb.py
+├── load_neo4j.py
+├── load_memgraph.py
+├── load_memgraph_relationships.py
+├── load_arango.py
+├── results.md
+└── README.md
+```
 
-| Neighbors found | 14 |
+## Reproduction
 
-| Queries | 50 |
+Create a Python virtual environment and install the dependencies used by the benchmark scripts. Configure database credentials through environment variables or a local `.env` file. Never commit credentials, passwords, or private certificates.
 
-| Minimum | 290.311 ms |
+Load the target database first, then run its benchmark scripts. For example:
 
-| Average | 503.721 ms |
+```bash
+python load_neo4j.py
+python benchmark_neo4j_indexed.py
+python benchmark_neo4j_traversal.py
+python benchmark_neo4j_aggregation.py
+python benchmark_neo4j_concurrency.py
+```
 
-| p50 | 362.610 ms |
+Equivalent scripts are provided for Memgraph and ArangoDB. CognoDB uses the original `benchmark_*.py` scripts.
 
-| p95 | 788.685 ms |
+## Limitations
 
-| Maximum | 4191.022 ms |
+- Cloud-hosted database configurations and regions were not identical.
+- Network latency is included in request measurements.
+- CPU and memory utilization were not directly measured.
+- CognoDB did not complete the 200,000-edge ingestion because of repeated Bolt connection failures.
+- ArangoDB 3-hop traversal was reduced to 20 measured iterations because the original 100-query run became impractically slow.
+- The benchmark uses a relatively small dataset and a fixed workload, so results should be interpreted in that context.
 
+## Detailed Results
 
-
-\## Aggregation Benchmark
-
-
-
-Configuration:
-
-
-
-\- Iterations: 30
-
-\- Warm-up queries: 5
-
-\- Operation: Count CONNECTED\_TO relationships
-
-
-
-Results:
-
-
-
-| Metric | Result |
-
-|---|---:|
-
-| Relationships counted | 50,000 |
-
-| Queries | 30 |
-
-| Minimum | 240.671 ms |
-
-| Average | 259.826 ms |
-
-| p50 | 246.443 ms |
-
-| p95 | 288.668 ms |
-
-| Maximum | 541.415 ms |
-
-
-
-\## Concurrent Throughput Benchmark
-
-
-
-Configuration:
-
-
-
-\- Concurrent workers: 10
-
-\- Total requests: 100
-
-\- Workload: User lookup
-
-
-
-Results:
-
-
-
-| Metric | Result |
-
-|---|---:|
-
-| Workers | 10 |
-
-| Requests | 100 |
-
-| Total time | 14.596 seconds |
-
-| Throughput | 6.85 requests/sec |
-
-| p50 | 1303.085 ms |
-
-| p95 | 2587.818 ms |
-
-
-
-\## Resource Usage
-
-
-
-CPU and memory utilization were not directly captured through the
-
-available CognoDB interface during this benchmark run.
-
-
-
-No resource values are fabricated or estimated.
-
-
-
-\## Limitations
-
-
-
-1\. The full 200,000 relationship dataset was not successfully loaded.
-
-2\. Query benchmarks were therefore executed against 91,489 users and
-
-&#x20;  50,000 relationships.
-
-3\. Relationship ingestion experienced repeated Bolt connection failures.
-
-4\. Resource utilization was not directly measured.
-
-5\. The reported results represent the tested CognoDB environment and
-
-&#x20;  configuration and should not be interpreted as universal database
-
-&#x20;  performance characteristics.
-
-
-
-\## Benchmark Scripts
-
-
-
-The project contains scripts for:
-
-
-
-\- CognoDB connection testing
-
-\- Cypher testing
-
-\- Dataset validation
-
-\- Dataset preparation
-
-\- CognoDB loading
-
-\- Lookup benchmarking
-
-\- Traversal benchmarking
-
-\- Aggregation benchmarking
-
-\- Concurrent throughput benchmarking
-
-
-
-\## Reproducibility
-
-
-
-The benchmark should be reproduced using the same:
-
-
-
-\- Dataset
-
-\- Database configuration
-
-\- Query definitions
-
-\- Batch size
-
-\- Warm-up procedure
-
-\- Iteration counts
-
-\- Concurrency level
-
-\- Measurement methodology
-
-
-
-Results should be recorded together with the environment and test
-
-conditions.
-
-
-
-\## Conclusion
-
-
-
-The benchmark successfully measured lookup, traversal, aggregation,
-
-and concurrent query behavior on the tested CognoDB environment.
-
-
-
-The main ingestion limitation observed during the experiment was
-
-repeated Bolt connection failure during relationship loading.
-
-
-
-Further benchmarking with the complete 200,000-edge dataset would be
-
-required for a full-dataset comparison.
-
+See [`results.md`](results.md) for the detailed results, configurations, observations, and limitations.
