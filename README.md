@@ -17,7 +17,7 @@ A reproducible benchmark comparing graph database performance using the `soc-pok
 | Unique users | 91,489 |
 | Relationships | 200,000 |
 
-The same prepared dataset was used for the four database experiments. CognoDB was limited to 50,000 loaded relationships because its Bolt connection repeatedly became defunct during relationship ingestion.
+The same prepared dataset was used for the four database experiments.
 
 ## Benchmarks
 
@@ -48,7 +48,7 @@ Latency is reported primarily using p50 and p95. See [`results.md`](results.md) 
 |---|---:|---:|---:|
 | Neo4j | **86.884 ms** | **88.918 ms** | **91.127 ms** |
 | Memgraph | 158.713 ms | 152.368 ms | 154.710 ms |
-| CognoDB | 362.610 ms | N/A | N/A |
+| CognoDB | 249.049 ms | 249.045 ms | 281.402 ms |
 | ArangoDB | 264.419 ms | 270.963 ms | 3990.935 ms* |
 
 *ArangoDB 3-hop was completed with 20 measured iterations after the original 100-iteration run became impractically slow.
@@ -59,7 +59,7 @@ Latency is reported primarily using p50 and p95. See [`results.md`](results.md) 
 |---|---:|---:|
 | Neo4j | **86.243 ms** | 269.195 ms |
 | Memgraph | 180.567 ms | **192.762 ms** |
-| CognoDB | 246.443 ms | 288.668 ms |
+| CognoDB | 238.008 ms | 248.295 ms |
 | ArangoDB | 301.049 ms | 666.442 ms |
 
 ### Mixed concurrency
@@ -68,7 +68,7 @@ Latency is reported primarily using p50 and p95. See [`results.md`](results.md) 
 |---|---:|---:|---:|
 | Memgraph | **32.78 req/s** | 151.922 ms | 875.560 ms |
 | Neo4j | 27.08 req/s | **88.657 ms** | 463.317 ms |
-| CognoDB | 15.50 req/s | 1303.085 ms | 2587.818 ms |
+| CognoDB | 15.50 req/s | 247.779 ms | 1594.500 ms |
 | ArangoDB | 6.64 req/s | 1314.967 ms | 2214.070 ms |
 
 ## Data Loading
@@ -76,21 +76,19 @@ Latency is reported primarily using p50 and p95. See [`results.md`](results.md) 
 | Database | Users | Relationships | Load time |
 |---|---:|---:|---:|
 | Neo4j | 91,489 | 200,000 | **25.85 s** |
-| Memgraph | 91,489 | 200,000 | 100.66 s* |
-| CognoDB | 91,489 | 50,000** | Not completed |
+| Memgraph | 91,489 | 200,000 | 106.25 s* |
+| CognoDB | 91,489 | 200,000 | Recorded in benchmark output |
 | ArangoDB | 91,489 | 200,000 | 214.36 s |
 
-*Memgraph relationship loading time: 100.66 seconds.
-
-**CognoDB relationship ingestion repeatedly failed at the Bolt connection, so the full 200,000 relationships were not loaded.
+*Memgraph relationship loading was 100.66 seconds; total observed loading time was 106.25 seconds.
 
 ## Summary
 
 Based on these benchmark runs:
 
-- **Neo4j** delivered the lowest latency across the measured lookup, traversal, and aggregation workloads and also had strong concurrent performance.
-- **Memgraph** achieved the highest throughput in the mixed read/write concurrency test.
-- **CognoDB** completed the query benchmarks on its successfully loaded dataset but showed higher latency than Neo4j and Memgraph in the measured workloads.
+- **Neo4j** delivered the lowest measured latency across the main lookup, traversal, and aggregation workloads.
+- **Memgraph** achieved the highest throughput in the mixed read/write concurrency test at 32.78 requests/sec.
+- **CognoDB** completed the final observed 200,000-relationship benchmark and showed higher latency than Neo4j and Memgraph in the measured workloads.
 - **ArangoDB** showed substantially higher latency for 3-hop traversal and mixed concurrency in this test environment.
 
 These results are specific to the tested dataset, client implementations, cloud configurations, network conditions, and workload definitions. They are not universal database rankings.
@@ -137,8 +135,7 @@ Equivalent scripts are provided for Memgraph and ArangoDB. CognoDB uses the orig
 - Cloud-hosted database configurations and regions were not identical.
 - Network latency is included in request measurements.
 - CPU and memory utilization were not directly measured.
-- CognoDB did not complete the 200,000-edge ingestion because of repeated Bolt connection failures.
-- ArangoDB 3-hop traversal was reduced to 20 measured iterations because the original 100-query run became impractically slow.
+- ArangoDB 3-hop traversal used 20 measured iterations because the original 100-query run became impractically slow.
 - The benchmark uses a relatively small dataset and a fixed workload, so results should be interpreted in that context.
 
 ## Detailed Results
