@@ -11,7 +11,7 @@ URI = os.environ["COGNODB_URI"]
 USERNAME = os.environ["COGNODB_USERNAME"]
 PASSWORD = os.environ["COGNODB_PASSWORD"]
 
-ITERATIONS = 30
+ITERATIONS = 100
 
 driver = GraphDatabase.driver(
     URI,

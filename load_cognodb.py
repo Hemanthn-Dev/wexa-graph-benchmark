@@ -12,13 +12,14 @@ USERNAME = os.environ["COGNODB_USERNAME"]
 PASSWORD = os.environ["COGNODB_PASSWORD"]
 
 DATASET = Path("data/soc-pokec-200k.txt")
-BATCH_SIZE = 2000
+BATCH_SIZE = 10000
 
 driver = GraphDatabase.driver(
     URI,
-    auth=(USERNAME, PASSWORD)
+    auth=(USERNAME, PASSWORD),
+    connection_timeout=30,
+    max_connection_lifetime=300
 )
-
 
 def create_users(tx, ids):
     tx.run(

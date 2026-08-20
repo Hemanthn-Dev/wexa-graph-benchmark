@@ -11,11 +11,6 @@ URI = os.environ["COGNODB_URI"]
 USERNAME = os.environ["COGNODB_USERNAME"]
 PASSWORD = os.environ["COGNODB_PASSWORD"]
 
-USER_IDS = [
-    "1", "13", "11", "6", "3",
-    "4", "5", "15", "14", "7"
-]
-
 ITERATIONS = 100
 
 driver = GraphDatabase.driver(
@@ -24,13 +19,14 @@ driver = GraphDatabase.driver(
 )
 
 
-def lookup_user(session, user_id):
+def filtered_lookup(session):
     result = session.run(
         """
-        MATCH (u:User {id: $user_id})
+        MATCH (u:User)
+        WHERE u.id = $user_id
         RETURN u.id AS id
         """,
-        user_id=user_id
+        user_id="1"
     )
 
     return result.single()
@@ -61,29 +57,24 @@ try:
 
     latencies = []
 
-    print("Starting lookup benchmark...")
+    print("Starting indexed/filtered lookup benchmark...")
     print(f"Iterations: {ITERATIONS}")
+    print("Indexed property: User.id")
     print()
 
     with driver.session() as session:
 
-        # Warm-up
-        for user_id in USER_IDS:
-            lookup_user(session, user_id)
+        for _ in range(10):
+            filtered_lookup(session)
 
         print("Warm-up completed.")
         print("Running measured queries...")
 
-        for i in range(ITERATIONS):
-
-            user_id = USER_IDS[i % len(USER_IDS)]
+        for _ in range(ITERATIONS):
 
             start = time.perf_counter()
 
-            result = lookup_user(
-                session,
-                user_id
-            )
+            result = filtered_lookup(session)
 
             elapsed = (
                 time.perf_counter() - start
@@ -91,41 +82,22 @@ try:
 
             if result is None:
                 raise RuntimeError(
-                    f"User {user_id} was not found"
+                    "User 1 was not found"
                 )
 
             latencies.append(elapsed)
 
     print()
-    print("Lookup benchmark results")
-    print("------------------------")
-
-    print(
-        f"Queries: {len(latencies)}"
-    )
-
-    print(
-        f"Min: {min(latencies):.3f} ms"
-    )
-
-    print(
-        f"Average: {statistics.mean(latencies):.3f} ms"
-    )
-
-    print(
-        f"p50: {percentile(latencies, 50):.3f} ms"
-    )
-
-    print(
-        f"p95: {percentile(latencies, 95):.3f} ms"
-    )
-
-    print(
-        f"Max: {max(latencies):.3f} ms"
-    )
-
+    print("Indexed/filtered lookup results")
+    print("-------------------------------")
+    print(f"Queries: {len(latencies)}")
+    print(f"Min: {min(latencies):.3f} ms")
+    print(f"Average: {statistics.mean(latencies):.3f} ms")
+    print(f"p50: {percentile(latencies, 50):.3f} ms")
+    print(f"p95: {percentile(latencies, 95):.3f} ms")
+    print(f"Max: {max(latencies):.3f} ms")
     print()
-    print("✅ Lookup benchmark completed.")
+    print("Indexed/filtered lookup completed.")
 
 finally:
 

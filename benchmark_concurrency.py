@@ -15,6 +15,9 @@ PASSWORD = os.environ["COGNODB_PASSWORD"]
 WORKERS = 10
 REQUESTS = 100
 
+READ_PERCENT = 80
+WRITE_PERCENT = 20
+
 USER_IDS = [
     "1", "13", "11", "6", "3",
     "4", "5", "15", "14", "7"
@@ -26,7 +29,7 @@ driver = GraphDatabase.driver(
 )
 
 
-def lookup(user_id):
+def read_user(user_id):
 
     start = time.perf_counter()
 
@@ -51,7 +54,30 @@ def lookup(user_id):
         time.perf_counter() - start
     ) * 1000
 
-    return elapsed
+    return "READ", elapsed
+
+
+def write_user(user_id):
+
+    start = time.perf_counter()
+
+    with driver.session() as session:
+
+        session.run(
+            """
+            MATCH (u:User {id: $user_id})
+            SET u.benchmark_write = $value
+            RETURN u.id
+            """,
+            user_id=user_id,
+            value=time.time()
+        ).consume()
+
+    elapsed = (
+        time.perf_counter() - start
+    ) * 1000
+
+    return "WRITE", elapsed
 
 
 def percentile(values, percentile):
@@ -61,7 +87,10 @@ def percentile(values, percentile):
     index = (len(values) - 1) * percentile / 100
 
     lower = int(index)
-    upper = min(lower + 1, len(values) - 1)
+    upper = min(
+        lower + 1,
+        len(values) - 1
+    )
 
     if lower == upper:
         return values[lower]
@@ -78,12 +107,60 @@ try:
 
     driver.verify_connectivity()
 
-    print("Starting concurrency benchmark...")
+    print("Starting mixed read/write concurrency benchmark...")
     print(f"Workers: {WORKERS}")
     print(f"Requests: {REQUESTS}")
+    print(f"Read mix: {READ_PERCENT}%")
+    print(f"Write mix: {WRITE_PERCENT}%")
     print()
 
+    # Warm-up
+    with driver.session() as session:
+
+        for user_id in USER_IDS:
+
+            session.run(
+                """
+                MATCH (u:User {id: $user_id})
+                RETURN u.id
+                """,
+                user_id=user_id
+            ).consume()
+
+    print("Warm-up completed.")
+    print("Running concurrent workload...")
+
+    read_requests = int(
+        REQUESTS * READ_PERCENT / 100
+    )
+
+    write_requests = (
+        REQUESTS - read_requests
+    )
+
+    tasks = []
+
+    for i in range(read_requests):
+
+        tasks.append(
+            (
+                "READ",
+                USER_IDS[i % len(USER_IDS)]
+            )
+        )
+
+    for i in range(write_requests):
+
+        tasks.append(
+            (
+                "WRITE",
+                USER_IDS[i % len(USER_IDS)]
+            )
+        )
+
     latencies = []
+    read_latencies = []
+    write_latencies = []
 
     start_total = time.perf_counter()
 
@@ -91,22 +168,40 @@ try:
         max_workers=WORKERS
     ) as executor:
 
-        futures = [
-            executor.submit(
-                lookup,
-                USER_IDS[i % len(USER_IDS)]
-            )
-            for i in range(REQUESTS)
-        ]
+        future_map = {}
 
-        for future in as_completed(futures):
+        for operation, user_id in tasks:
 
-            latencies.append(
-                future.result()
-            )
+            if operation == "READ":
+
+                future = executor.submit(
+                    read_user,
+                    user_id
+                )
+
+            else:
+
+                future = executor.submit(
+                    write_user,
+                    user_id
+                )
+
+            future_map[future] = operation
+
+        for future in as_completed(future_map):
+
+            operation, latency = future.result()
+
+            latencies.append(latency)
+
+            if operation == "READ":
+                read_latencies.append(latency)
+            else:
+                write_latencies.append(latency)
 
     total_time = (
-        time.perf_counter() - start_total
+        time.perf_counter()
+        - start_total
     )
 
     throughput = (
@@ -114,16 +209,51 @@ try:
     )
 
     print()
-    print("Concurrency benchmark results")
-    print("-----------------------------")
+    print("Mixed concurrency benchmark results")
+    print("------------------------------------")
+
     print(f"Workers: {WORKERS}")
     print(f"Requests: {len(latencies)}")
+    print(f"Reads: {len(read_latencies)}")
+    print(f"Writes: {len(write_latencies)}")
     print(f"Total time: {total_time:.3f} seconds")
     print(f"Throughput: {throughput:.2f} requests/sec")
-    print(f"p50: {percentile(latencies, 50):.3f} ms")
-    print(f"p95: {percentile(latencies, 95):.3f} ms")
+
     print()
-    print("✅ Concurrency benchmark completed.")
+    print("Overall latency")
+    print(
+        f"p50: "
+        f"{percentile(latencies, 50):.3f} ms"
+    )
+    print(
+        f"p95: "
+        f"{percentile(latencies, 95):.3f} ms"
+    )
+
+    print()
+    print("Read latency")
+    print(
+        f"p50: "
+        f"{percentile(read_latencies, 50):.3f} ms"
+    )
+    print(
+        f"p95: "
+        f"{percentile(read_latencies, 95):.3f} ms"
+    )
+
+    print()
+    print("Write latency")
+    print(
+        f"p50: "
+        f"{percentile(write_latencies, 50):.3f} ms"
+    )
+    print(
+        f"p95: "
+        f"{percentile(write_latencies, 95):.3f} ms"
+    )
+
+    print()
+    print("Mixed concurrency benchmark completed.")
 
 finally:
 
